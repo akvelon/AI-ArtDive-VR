@@ -1,0 +1,8 @@
+version: '3.4'
+
+services:
+  pano_tools:
+    image: pano_tools
+    build:
+      context: .
+      dockerfile: ./Dockerfile.pano-converter

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DeepArtConsoleClient": {
+      "commandName": "Project",
+      "commandLineArgs": "--save-reports All"
+    }
+  }
+}

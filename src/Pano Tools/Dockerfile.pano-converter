@@ -1,0 +1,191 @@
+#-------------------------------------------------------------------------
+# DOTNET build stages
+#-------------------------------------------------------------------------
+
+FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS dotnet_base
+WORKDIR /app
+
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS dotnet_build
+WORKDIR /src
+COPY ["deep-art-utils/src/DeepArtConsoleClient/DeepArtConsoleClient.csproj", "src/DeepArtConsoleClient/"]
+RUN dotnet restore "src/DeepArtConsoleClient/DeepArtConsoleClient.csproj"
+
+WORKDIR "/src/DeepArtConsoleClient"
+COPY ["deep-art-utils/src/DeepArtConsoleClient/", "."]
+
+RUN dotnet build "DeepArtConsoleClient.csproj" \
+  -c Release \
+  -p:PublishSingleFile=true \
+  -o /app/build
+
+FROM dotnet_build AS dotnet_publish
+RUN dotnet publish "DeepArtConsoleClient.csproj" \
+  -c Release \
+  -o /app/publish \
+  -r linux-x64 \
+  -p:PublishSingleFile=true \
+  --self-contained true
+
+#-------------------------------------------------------------------------
+# Ubuntu build & run stages
+#-------------------------------------------------------------------------
+
+# use Ubuntu 20.04 LTS
+FROM ubuntu:20.04 AS base
+
+# non-interactive mode enabled
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Keeps Python from generating .pyc files in the container
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Turns off buffering for easier container logging
+ENV PYTHONUNBUFFERED=1
+
+VOLUME ["/gen"]
+
+# preinstall
+RUN apt-get update \
+  && apt-get upgrade --assume-yes \
+  && apt-get install --assume-yes apt-transport-https
+
+# copy install data
+COPY ["pano-converter/install/.", "/app/build"]
+
+# install dependencies
+RUN apt-get update \
+  && apt-get install --assume-yes \
+    cmake \
+    pkg-config \
+    libwxgtk-media3.0-gtk3-dev \
+    libwxgtk-webview3.0-gtk3-dev \
+    libwxgtk3.0-gtk3-dev \
+    libjpeg-dev \
+    libtiff-dev \
+    libpng-dev \
+    libexiv2-dev \
+    libglew-dev  \
+    libpano13-dev \
+    libboost1.67-all-dev \
+    liblcms2-dev \
+    libsqlite3-dev \
+    libgettextpo-dev \
+    libxi-dev \
+    libxmu-dev \
+    libgettextpo-dev \
+    libx11-dev \
+    gettext \
+    mercurial \
+    libgsl-dev \
+    python3-pip \
+    python3-dev \
+    swig \
+    wget \
+    git \
+    mc \
+  && rm --recursive --force /var/lib/apt/lists/*
+
+# setup Python
+RUN cd /usr/local/bin \
+  && ln --symbolic /usr/bin/python3 python \
+  && pip3 --no-cache-dir install --upgrade pip
+
+# install pip requirements
+COPY ["pano-converter/requirements.txt", "."]
+RUN python -m pip install -r requirements.txt
+
+# set working directory
+WORKDIR /app
+
+# copy from dotnet publish
+COPY --from=dotnet_publish ["/app/publish", "/app/build"]
+
+# install blender
+RUN cd /app/build \
+  && wget https://download.blender.org/release/Blender3.2/blender-3.2.1-linux-x64.tar.xz \
+  && sha256sum --check blender-3.2.1.sha256 \
+  && tar --extract --file=blender-3.2.1-linux-x64.tar.xz --directory=/usr/local --strip-components=0 \
+  && cd /usr/local/bin \
+  && ln --symbolic /usr/local/blender-3.2.1-linux-x64/blender blender
+
+# install OpenEXR
+RUN cd /app/build \
+  && wget --output-document=openexr-2.5.8.tar.gz https://github.com/AcademySoftwareFoundation/openexr/archive/refs/tags/v2.5.8.tar.gz \
+  && sha256sum --check openexr-2.5.8.sha256 \
+  && tar --extract --file=openexr-2.5.8.tar.gz \
+  && cd /app/build/openexr-2.5.8 \
+  && mkdir --verbose /app/build/openexr-2.5.8/build \
+  && cd /app/build/openexr-2.5.8/build \
+  && cmake -DBUILD_SHARED_LIBS=1 .. \
+  && make -j8 \
+  && make install
+
+# install Vigra (2022-01)
+RUN cd /app/build \
+  && git clone --no-checkout https://github.com/ukoethe/vigra.git \
+  && cd /app/build/vigra \
+  && git checkout 093d57d15c8c237adf1704d96daa6393158ce299 \
+  && mkdir --verbose /app/build/vigra/build \
+  && cd /app/build/vigra/build \
+  && cmake -DBUILD_SHARED_LIBS=1 -DWITH_OPENEXR=1 .. \
+  && make -j8 \
+  && make install
+
+# install Hugin
+RUN cd /app/build \
+  && wget --output-document=hugin-2021.0.0.tar.bz2 https://sourceforge.net/projects/hugin/files/hugin/hugin-2021.0/hugin-2021.0.0.tar.bz2/download \
+  && sha256sum --check hugin-2021.0.0.sha256 \
+  && tar --extract --file=hugin-2021.0.0.tar.bz2 \
+  && cd /app/build/hugin-2021.0.0 \
+  && mkdir --verbose /app/build/hugin-2021.0.0/build \
+  && cd /app/build/hugin-2021.0.0/build \
+  && cmake -DBUILD_SHARED_LIBS=1 .. \
+  && make -j8 \
+  && make install
+
+# install Enblend (2022-03)
+RUN cd /app/build \
+  && hg clone --rev 0f423c72e518 http://hg.code.sf.net/p/enblend/code/#default enblend \
+  && cd /app/build/enblend \
+  && mkdir --verbose /app/build/enblend/build \
+  && cd /app/build/enblend/build \
+  && cmake -DBUILD_SHARED_LIBS=1 .. \
+  && make -j8 \
+  && make install
+
+# install DeepArtConsoleClient
+RUN cd /app/build \
+  && install --verbose /app/build/DeepArtConsoleClient /usr/local/bin/
+
+# cleanup build directory
+RUN rm --recursive --force /app/build
+
+# create app-specific image
+FROM base
+
+# make looking SO-files in /usr/local/lib
+RUN ldconfig /usr/local/lib
+
+COPY ["pano-converter/src/.", "/app/src"]
+COPY ["pano-converter/data/.", "/app/data"]
+
+# extract enblend masks
+RUN cd /app/data \
+  && tar --extract --file=enblend_ref-masks.tar.gz
+
+# # create mount point for /gen directory
+# RUN mkdir --verbose /gen
+
+# # Creates a non-root user with an explicit UID and adds permission to access the /app and /gen directories
+# # For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
+# RUN adduser \
+#     -u 5678 \
+#     --disabled-password \
+#     --gecos "" \
+#     appuser \
+#   && chown --recursive appuser /app \
+#   && chown --recursive appuser /gen
+# USER appuser
+
+# During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
+CMD ["python", "src/convert.py"]

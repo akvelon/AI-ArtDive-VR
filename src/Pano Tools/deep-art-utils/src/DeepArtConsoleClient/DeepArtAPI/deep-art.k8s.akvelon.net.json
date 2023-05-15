@@ -1,0 +1,246 @@
+{
+  "swagger": "2.0",
+  "basePath": "/api",
+  "paths": {
+    "/effects": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/StyleInfo"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "get_effects",
+        "tags": [
+          "effects"
+        ]
+      }
+    },
+    "/media": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "Location": {
+                "description": "Path to the uploaded content",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operationId": "post_media_add",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "formData",
+            "type": "file",
+            "required": true
+          }
+        ],
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/media/{media_id}": {
+      "get": {
+        "responses": {
+          "400": {
+            "description": "Validation error"
+          },
+          "200": {
+            "description": "Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "operationId": "get_media_list",
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uuid",
+            "description": null
+          }
+        ],
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/operations": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "operationId": "post_operation_submit",
+        "parameters": [
+          {
+            "name": "payload",
+            "required": true,
+            "in": "body",
+            "schema": {
+              "$ref": "#/definitions/SubmitOperationParameters"
+            }
+          }
+        ],
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/operations/{operation_id}": {
+      "get": {
+        "responses": {
+          "400": {
+            "description": "Validation error"
+          },
+          "303": {
+            "description": "Operation complete",
+            "headers": {
+              "Location": {
+                "description": "Path to the processed content",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "operationId": "get_operation_check",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uuid",
+            "description": null
+          }
+        ],
+        "tags": [
+          "operations"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Deep Art",
+    "version": "1.0"
+  },
+  "produces": [
+    "application/json"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "tags": [
+    {
+      "name": "effects",
+      "description": "Effects"
+    },
+    {
+      "name": "media",
+      "description": "Media"
+    },
+    {
+      "name": "operations",
+      "description": "Operation"
+    }
+  ],
+  "definitions": {
+    "StyleInfo": {
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string",
+          "example": "VIDEO",
+          "enum": [
+            "VIDEO",
+            "IMAGE"
+          ]
+        },
+        "paid": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "SubmitOperationParameters": {
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "media": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "effect": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          "required": [
+            "media",
+            "effect"
+          ]
+        }
+      },
+      "required": [
+        "data"
+      ]
+    }
+  },
+  "responses": {
+    "ParseError": {
+      "description": "When a mask can't be parsed"
+    },
+    "MaskError": {
+      "description": "When any error occurs on mask"
+    }
+  }
+}

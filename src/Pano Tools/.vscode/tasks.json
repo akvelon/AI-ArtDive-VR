@@ -1,0 +1,41 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "[pano-converter] docker-build",
+			"type": "docker-build",
+			"dependsOn": [
+				"[pano-converter] prebuild"
+			],
+			"platform": "python",
+			"dockerBuild": {
+				"tag": "pano_tools:latest",
+				"dockerfile": "${workspaceFolder}/Dockerfile.pano-converter",
+				"context": "${workspaceFolder}",
+				"pull": true
+			}
+		},
+		{
+			"label": "[pano-converter] docker-run: debug",
+			"type": "docker-run",
+			"dependsOn": [
+				"[pano-converter] docker-build"
+			],
+			"dockerRun": {
+				"image": "pano_tools:latest",
+				"containerName": "pano_tools_debug",
+				"customOptions": "--user \"$(id -u):$(id -g)\"",
+				"volumes": [
+					{
+						"localPath": "${workspaceFolder}/gen",
+						"containerPath": "/gen",
+						"permissions": "rw"
+					}
+				]
+			},
+			"python": {
+				"file": "src/convert.py"
+			}
+		}
+	]
+}
